@@ -58,13 +58,13 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
-	defer close(c)
-
 	g, ctx := errgroup.WithContext(context.Background())
 
 	g.Go(func() error {
-		logger.Info("starting interrupt handler")
-		defer logger.Info("interrupt handler finished")
+		defer close(c)
+
+		logger.Info("interrupt handler goroutine started")
+		defer logger.Info("interrupt handler goroutine finished")
 
 		select {
 		case <-c:
@@ -77,17 +77,21 @@ func main() {
 	g.Go(func() error {
 		defer close(actions)
 
-		logger.Info("starting rotary encoder goroutine")
+		logger.Info("rotary encoder goroutine started")
 		defer logger.Info("rotary encoder goroutine finished")
 
 		re := device.NewRotaryEncoder(chip, *rotaryEncoderClockPinNumber, *rotaryEncoderDataPinNumber, logrus.NewEntry(logger))
 
-		return re.Run(ctx, actions)
+		if err := re.Run(ctx, actions); err != nil {
+			return fmt.Errorf("run rotary encoder: %w", err)
+		}
+
+		return nil
 	})
 
 	g.Go(func() error {
-		logger.Info("starting actions handler")
-		defer logger.Info("actions handler finished")
+		logger.Info("actions handler goroutine started")
+		defer logger.Info("actions handler goroutine finished")
 
 		i := 0
 		for action := range actions {
@@ -107,6 +111,7 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
-		panic(fmt.Errorf("running application goroutines: %w", err))
+		println(fmt.Errorf("running application goroutines: %w", err).Error())
+		os.Exit(1)
 	}
 }
