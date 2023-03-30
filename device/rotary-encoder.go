@@ -33,7 +33,7 @@ func NewRotaryEncoder(chip *gpiod.Chip, clockPin int, dataPin int, logger *logru
 }
 
 func (t *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
-	t.logger.Info("starting rotary encoder")
+	t.logger.Info("rotary encoder started")
 	defer t.logger.Info("rotary encoder finished")
 
 	previousClock, err := t.readClock()
@@ -41,11 +41,13 @@ func (t *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
 		return fmt.Errorf("read clock: %w", err)
 	}
 
+	t.logger.WithField("clock_pin", t.clockPin).WithField("value", previousClock).Trace("read clock")
+
 	var lines *gpiod.Lines
 	lineValues := []int{0, 0}
 
 	handler := func(event gpiod.LineEvent) {
-		t.logger.Info("starting rotary encoder event handler")
+		t.logger.Info("rotary encoder event handler started")
 		defer t.logger.Info("rotary encoder event handler finished")
 
 		err := lines.Values(lineValues)
@@ -54,7 +56,7 @@ func (t *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
 			panic(err)
 		}
 
-		t.logger.WithField("line_values", lineValues).Trace("read line values")
+		t.logger.WithField("clock_pin", t.clockPin).WithField("data_pin", t.dataPin).WithField("line_values", lineValues).Trace("read line values")
 
 		if previousClock != lineValues[0] && lineValues[0] == 1 {
 			if lineValues[1] != lineValues[0] {
@@ -83,11 +85,12 @@ func (t *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
 func (t *RotaryEncoder) readClock() (int, error) {
 	logger := t.logger.WithField("clock_pin", t.clockPin)
 
-	logger.Info("read clock values")
+	logger.Info("reading clock value")
+	defer logger.Info("read clock value")
 
 	clockLine, err := t.chip.RequestLine(t.clockPin, gpiod.AsInput)
 	if err != nil {
-		logger.WithError(err).Error("request line failed")
+		logger.WithError(err).Error("request clock line failed")
 		return 0, fmt.Errorf("request clock line: %w", err)
 	}
 
@@ -95,7 +98,7 @@ func (t *RotaryEncoder) readClock() (int, error) {
 
 	value, err := clockLine.Value()
 	if err != nil {
-		t.logger.WithError(err).Error("read clock line failed")
+		t.logger.WithError(err).Error("read clock value failed")
 		return 0, fmt.Errorf("read clock value: %w", err)
 	}
 
