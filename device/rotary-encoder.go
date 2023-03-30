@@ -90,7 +90,9 @@ func (t *RotaryEncoder) readClock() (int, error) {
 
 	clockLine, err := t.chip.RequestLine(t.clockPin, gpiod.AsInput)
 	if err != nil {
-		logger.WithError(err).Error("request clock line failed")
+		lineInfo, _ := t.chip.LineInfo(t.clockPin)
+
+		logger.WithError(err).WithField("clockPin", t.clockPin).WithField("clockLineInfo", lineInfo).Error("request clock line failed")
 		return 0, fmt.Errorf("request clock line: %w", err)
 	}
 
@@ -98,7 +100,7 @@ func (t *RotaryEncoder) readClock() (int, error) {
 
 	value, err := clockLine.Value()
 	if err != nil {
-		t.logger.WithError(err).Error("read clock value failed")
+		t.logger.WithError(err).WithField("clockLine", clockLine).Error("read clock value failed")
 		return 0, fmt.Errorf("read clock value: %w", err)
 	}
 
