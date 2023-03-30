@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	"github.com/warthog618/gpiod"
 )
 
@@ -19,18 +20,23 @@ type RotaryEncoder struct {
 	chip     *gpiod.Chip
 	clockPin int
 	dataPin  int
+	logger   *logrus.Entry
 }
 
-func NewRotaryEncoder(chip *gpiod.Chip, clockPin int, dataPin int) *RotaryEncoder {
+func NewRotaryEncoder(chip *gpiod.Chip, clockPin int, dataPin int, logger *logrus.Entry) *RotaryEncoder {
 	return &RotaryEncoder{
 		chip:     chip,
 		clockPin: clockPin,
 		dataPin:  dataPin,
+		logger:   logger,
 	}
 }
 
-func (r *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
-	previousClock, err := r.readClock()
+func (t *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
+	t.logger.Info("starting rotary encoder")
+	defer t.logger.Info("rotary encoder finished")
+
+	previousClock, err := t.readClock()
 	if err != nil {
 		return fmt.Errorf("read clock: %w", err)
 	}
@@ -39,24 +45,31 @@ func (r *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
 	lineValues := []int{0, 0}
 
 	handler := func(event gpiod.LineEvent) {
+		t.logger.Info("starting rotary encoder event handler")
+		defer t.logger.Info("rotary encoder event handler finished")
+
 		err := lines.Values(lineValues)
 		if err != nil {
+			t.logger.WithError(err).Error("read line values failed")
 			panic(err)
 		}
 
+		t.logger.WithField("line_values", lineValues).Trace("read line values")
+
 		if previousClock != lineValues[0] && lineValues[0] == 1 {
 			if lineValues[1] != lineValues[0] {
-				actions <- Clockwise
-			} else {
 				actions <- CounterClockwise
+			} else {
+				actions <- Clockwise
 			}
 		}
 
 		previousClock = lineValues[0]
 	}
 
-	lines, err = r.chip.RequestLines([]int{r.clockPin, r.dataPin}, gpiod.AsInput, gpiod.WithBothEdges, gpiod.WithEventHandler(handler))
+	lines, err = t.chip.RequestLines([]int{t.clockPin, t.dataPin}, gpiod.AsInput, gpiod.WithBothEdges, gpiod.WithEventHandler(handler))
 	if err != nil {
+		t.logger.WithError(err).WithField("clock_pin", t.clockPin).WithField("data_pin", t.dataPin).Error("request lines failed")
 		return fmt.Errorf("request lines: %w", err)
 	}
 
@@ -67,9 +80,14 @@ func (r *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
 	return nil
 }
 
-func (r *RotaryEncoder) readClock() (int, error) {
-	clockLine, err := r.chip.RequestLine(r.clockPin, gpiod.AsInput)
+func (t *RotaryEncoder) readClock() (int, error) {
+	logger := t.logger.WithField("clock_pin", t.clockPin)
+
+	logger.Info("read clock values")
+
+	clockLine, err := t.chip.RequestLine(t.clockPin, gpiod.AsInput)
 	if err != nil {
+		logger.WithError(err).Error("request line failed")
 		return 0, fmt.Errorf("request clock line: %w", err)
 	}
 
@@ -77,8 +95,11 @@ func (r *RotaryEncoder) readClock() (int, error) {
 
 	value, err := clockLine.Value()
 	if err != nil {
+		t.logger.WithError(err).Error("read clock line failed")
 		return 0, fmt.Errorf("read clock value: %w", err)
 	}
+
+	t.logger.WithField("value", value).Trace("read clock value")
 
 	return value, nil
 }
