@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/warthog618/gpiod"
+	"github.com/warthog618/gpiod/device/rpi"
 )
 
 type Action string
@@ -30,6 +31,25 @@ func NewRotaryEncoder(chip *gpiod.Chip, clockPin int, dataPin int, logger *logru
 		dataPin:  dataPin,
 		logger:   logger,
 	}
+}
+
+func NewRotaryEncoderFromPinNames(chip *gpiod.Chip, clockPinName string, dataPinName string, logger *logrus.Entry) (*RotaryEncoder, error) {
+	clockPin, err := rpi.Pin(clockPinName)
+	if err != nil {
+		return nil, fmt.Errorf("translate clock pin name: %w", err)
+	}
+
+	dataPin, err := rpi.Pin(dataPinName)
+	if err != nil {
+		return nil, fmt.Errorf("translate data pin name: %w", err)
+	}
+
+	return &RotaryEncoder{
+		chip:     chip,
+		clockPin: clockPin,
+		dataPin:  dataPin,
+		logger:   logger,
+	}, nil
 }
 
 func (t *RotaryEncoder) Run(ctx context.Context, actions chan<- Action) error {
